@@ -35,6 +35,18 @@ Read knowledge/data-sources.md 取得資料路徑清單。
 
 > **強制停止點：列出「已載入 / 找不到」清單，等用戶確認（或補充資料）後才繼續。**
 
+若核心區塊資料不足（任一區塊來源 < 2 個），
+Read knowledge/interview-questions.md，
+從對應主題群選 2-3 題向用戶提問，等用戶回答後才繼續萃取。
+
+| 缺少的區塊 | 對應主題群 |
+|-----------|----------|
+| Personality Traits | 主題一：人格底層 |
+| Thinking Frameworks | 主題二：思維與決策框架 |
+| Life Timeline | 主題三：人生軌跡與關鍵轉折 |
+| Expertise Map | 主題四：專業能力地圖 |
+| Work Style / Boundary Map | 主題五：工作邊界與合作模式 |
+
 ### 步驟 2：特質萃取與信心評分
 
 Read knowledge/extraction-framework.md 執行三向驗證（跨域複現、生成力、排他性）。
