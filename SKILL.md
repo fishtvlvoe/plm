@@ -1,133 +1,120 @@
 ---
 name: plm
-description: Personalization Lifecycle Modeling skill for extracting traits and generating autobiography + digital twin guides.
+description: "個人特質萃取與數位分身指南生成。觸發詞：/plm、啟動 PLM、建立我的分身、更新我的 PLM、有新資料"
+disable-model-invocation: true
 user-invocable: true
-triggers:
-  - /plm
-  - 啟動 PLM
-  - 建立我的分身
-  - 更新我的 PLM
-  - 有新資料
 ---
 
-# PLM Skill
+# PLM — 個人數位分身萃取
 
-## Compatible runtimes
-- Claude Code / Claude Desktop Skills
-- Codex AGENTS.md-compatible skill runners
+## GATE：強制對焦（不可跳過）
 
-## Skill structure contract
-- `SKILL.md` (this file)
-- `references/extraction-framework.md`
-- `references/output-templates.md`
-- `knowledge/data-sources.md`
+收到任務後，第一步：
+1. 複述「我理解你要 ___（首次建立分身 / 更新已有分身）」
+2. 問「方向對嗎？」→ 用戶說 OK 才往下
 
-## Phase 0 — Activation and mode routing
+---
 
-### Activation
-Activate when user input includes one of:
-- `/plm`
-- `啟動 PLM`
-- `建立我的分身`
-- `更新我的 PLM`
-- `有新資料`
+## 流程
 
-### Detect output files
-- `autobiography.md`
-- `digital-twin-guide.md`
+### 步驟 0：模式路由
 
-### Routing rules
-1. If user input contains `更新我的 PLM` or `有新資料`:
-   - If either output file exists: run **update-mode**
-   - If none exists: fallback to **first-run**
-2. If input is `/plm`, `啟動 PLM`, or `建立我的分身`:
-   - If files do not exist: run **first-run**
-   - If files exist and message contains new material (inline text or attached source path): run **update-mode**
-   - Otherwise default to **first-run**
+觸發詞：`/plm` / `啟動 PLM` / `建立我的分身` / `更新我的 PLM` / `有新資料`
 
-## Phase 1 — Source loading (first-run)
-1. Read `knowledge/data-sources.md`.
-2. Iterate sources one by one.
-3. For each source:
-   - If exists and extension is `.md` or `.csv`: load content.
-   - If missing: append to `not_found_sources` and log line exactly as:
-     - `not found: <path>`
-4. Continue processing even when files are missing.
+Read knowledge/data-sources.md 取得資料路徑清單。
 
-## Phase 2 — Extraction and confidence scoring
-1. Use `references/extraction-framework.md`:
-   - Three validations: cross-domain replication, generativity, exclusivity
-   - Confidence tags:
-     - `⚙️` = passes all validations
-     - `🧪` = fails one or more validations
-2. Apply source-family dedup before evidence counting (avoid `.csv` + `_all.csv` double count).
-3. Promotion rule:
-   - A `🧪` item can be upgraded to `⚙️` only when evidence count reaches **3+ unique evidence events**.
+路由規則：
+- 輸入含「更新」或「有新資料」且 autobiography.md / digital-twin-guide.md 已存在 → 進入**更新模式**
+- 其餘 → 進入**首次建立**
 
-## Phase 3 — Generate `autobiography.md`
-1. Use `references/output-templates.md` autobiography template.
-2. Must output exactly 6 sections:
-   - Personality Traits
-   - Thinking Frameworks
-   - Life Timeline & Key Decisions
-   - Expertise Map
-   - Work Style
-   - Boundary Map
-3. Every statement must be prefixed `⚙️` or `🧪`.
-4. Every section must include a `Sources:` line.
-5. If a section has no data, print exactly:
-   - `Data not available — run update mode with additional sources to fill this section`
+### 步驟 1：載入資料來源
 
-## Phase 4 — Generate `digital-twin-guide.md`
-1. Use `references/output-templates.md` digital twin template.
-2. Must output 5 modules:
-   - Module 1: SOUL.md Template
-   - Module 2: AI Configuration
-   - Module 3: Memory Seed Files
-   - Module 4: Expression DNA
-   - Module 5: Behavior Boundary
-3. Module 2 must include both:
-   - `### For Claude (CLAUDE.md)`
-   - `### For Codex (AGENTS.md)`
+依 knowledge/data-sources.md 逐一嘗試讀取每個來源：
+- 成功：載入內容
+- 失敗：記錄 `not found: <path>`，繼續不中斷
 
-## Phase 5 — Summary output
-Print:
-- Total traits extracted
-- `⚙️` count
-- `🧪` count
-- Output paths
+> **強制停止點：列出「已載入 / 找不到」清單，等用戶確認（或補充資料）後才繼續。**
 
-Format:
-`Extracted <total> traits: <confirmed> ⚙️ confirmed, <hypothesis> 🧪 hypotheses → autobiography.md, digital-twin-guide.md`
+### 步驟 2：特質萃取與信心評分
 
-## Update mode implementation
+Read knowledge/extraction-framework.md 執行三向驗證（跨域複現、生成力、排他性）。
 
-### Inputs
-- Existing `autobiography.md`
-- Existing `digital-twin-guide.md`
-- Newly loaded sources from Phase 1
+標記規則：
+- 通過全部三驗證 → `⚙️` 確信事實
+- 有任一失敗 → `🧪` 暫定假設
+- 累積 3+ 獨立證據且三驗證全過 → `🧪` 升級為 `⚙️`，記錄升級日期
 
-### Merge contract
-1. Parse existing traits with tag and section.
-2. Canonical identity:
-   - `trait_id = normalize(section + statement)`
-3. Keep all prior `⚙️` by default.
-4. If new evidence explicitly contradicts prior `⚙️`:
-   - Downgrade to `🧪`
-   - Annotate inline:
-     - `Contradicted by: <source>, <YYYY-MM-DD>`
-5. Add newly extracted traits.
-6. Do not overwrite unchanged prior traits.
+去重規則：同根名檔案（如 `trait.csv` 與 `trait_all.csv`）視為同一來源家族，不重複計算證據數。
 
-### Changelog prepend
-For both output files:
-1. Ensure there is a single top-level `## Changelog`.
-2. Prepend one new entry under it:
-   - `### <YYYY-MM-DD>: <N> traits added, <M> modified`
-3. Never duplicate `## Changelog` header.
+### 步驟 3：輸出 autobiography.md
 
-## Security and robustness checks (audit discipline)
-- Reject unsupported source extensions.
-- Treat empty/zero values as invalid evidence, not as confirmed.
-- If source parsing fails, emit explicit parse error per file and continue with remaining files.
-- Never silently swallow contradiction events; always annotate output.
+Read TEMPLATES.md 套用自傳模板，輸出 6 大區塊：
+Personality Traits、Thinking Frameworks、Life Timeline & Key Decisions、Expertise Map、Work Style、Boundary Map
+
+每條陳述必須標 `⚙️` 或 `🧪`；每區塊末尾加 `Sources:` 引用來源。
+無資料時輸出：`Data not available — run update mode with additional sources to fill this section`
+
+### 步驟 4：輸出 digital-twin-guide.md
+
+Read TEMPLATES.md 套用數位分身模板，輸出 5 模組：
+Module 1: SOUL.md 模板、Module 2: AI 設定（含 CLAUDE.md + AGENTS.md 格式）、Module 3: 記憶種子、Module 4: 表達 DNA、Module 5: 行為邊界
+
+> **強制停止點：兩份文件草稿產出後，等用戶確認無誤才存檔。**
+
+### 步驟 5：品質檢查（必須執行）
+
+| 項目 | 標準 |
+|------|------|
+| 結構完整 | 6 區塊（自傳）+ 5 模組（分身指南）全部填寫 |
+| 信心標記 | 每條陳述都有 `⚙️` 或 `🧪` |
+| 來源引用 | 每區塊有 `Sources:` |
+| 無矛盾遺漏 | 矛盾事實已標注，未靜默忽略 |
+
+### 步驟 6：摘要輸出
+
+格式：`提取 <total> 個特質：<confirmed> ⚙️ 確信，<hypothesis> 🧪 假設 → autobiography.md, digital-twin-guide.md`
+
+---
+
+## 更新模式（update-mode）
+
+觸發條件：已有輸出檔 + 新資料輸入
+
+合併規則：
+1. 保留所有既有 `⚙️`（除非新資料明確矛盾）
+2. 矛盾 → 降級為 `🧪`，標注 `Contradicted by: <source>, <YYYY-MM-DD>`
+3. 新特質直接加入
+4. 兩份輸出檔各自 prepend changelog 條目：`### <YYYY-MM-DD>：<N> 個特質新增，<M> 個修改`，不得重複 `## Changelog` 標題
+
+## PLM Skill 本身的更新
+
+若 PLM Skill 有新版本發布，執行以下步驟讓本機安裝保持最新：
+
+```bash
+# 進入你的 PLM 安裝目錄
+cd /path/to/plm
+
+# 拉取最新版本
+git pull origin main
+```
+
+更新後重啟 AI Agent，新版 SKILL.md 即生效。
+
+---
+
+## 完成條件
+
+- [ ] GATE 已通過，模式已確認
+- [ ] 資料載入清單已給用戶確認
+- [ ] 兩份輸出草稿已給用戶確認
+- [ ] 品質檢查全部通過
+- [ ] 摘要已輸出
+
+---
+
+## 安全與健壯性規則
+
+- 拒絕不支援的來源副檔名（非 .md / .csv）
+- 空值或零值不算有效證據
+- 來源解析失敗 → 輸出明確錯誤訊息並繼續其餘來源
+- 矛盾事件必須標注，禁止靜默忽略
